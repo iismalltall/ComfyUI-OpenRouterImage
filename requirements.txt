@@ -1,0 +1,7 @@
+# ComfyUI-OpenRouterImage Plugin Dependencies
+# OpenAI SDK for OpenRouter API compatibility (OpenRouter uses OpenAI-compatible API)
+openai>=1.0.0
+
+# Pillow for PIL image processing and format conversions
+pillow>=9.0.0
+requests>=2.28.0

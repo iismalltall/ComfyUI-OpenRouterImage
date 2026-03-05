@@ -1,0 +1,84 @@
+{
+  "api_key": "",
+  "models": [
+    {
+      "id": "google/gemini-3-pro-image-preview",
+      "name": "Gemini 3 Pro Image"
+    },
+    {
+      "id": "google/gemini-3.1-flash-image-preview",
+      "name": "Gemini 3.1 Flash Image"
+    },
+    {
+      "id": "google/gemini-2.5-flash-image-preview",
+      "name": "Gemini 2.5 Flash Image"
+    }
+  ],
+    {
+      "id": "google/gemini-3-pro-image-preview",
+      "name": "Gemini 3 Pro Image"
+    },
+    {
+      "id": "google/gemini-3.1-flash-image-preview",
+      "name": "Gemini 3.1 Flash Image"
+    }
+  ],
+  "resolutions": [
+    {
+      "value": "0.5K",
+      "name": "0.5K (512x512)"
+    },
+    {
+      "value": "1K",
+      "name": "1K (1024x1024)"
+    },
+    {
+      "value": "2K",
+      "name": "2K (2048x2048)"
+    },
+    {
+      "value": "4K",
+      "name": "4K (4096x4096)"
+    }
+  ],
+  "aspect_ratios": [
+    {
+      "value": "1:1",
+      "name": "1:1 (Square)"
+    },
+    {
+      "value": "2:3",
+      "name": "2:3 (Portrait)"
+    },
+    {
+      "value": "3:2",
+      "name": "3:2 (Landscape)"
+    },
+    {
+      "value": "16:9",
+      "name": "16:9 (Widescreen)"
+    },
+    {
+      "value": "9:16",
+      "name": "9:16 (Mobile Portrait)"
+    },
+    {
+      "value": "4:3",
+      "name": "4:3 (Standard)"
+    },
+    {
+      "value": "3:4",
+      "name": "3:4 (Portrait)"
+    }
+  ],
+  "defaults": {
+    "model": "google/gemini-3-pro-image-preview",
+    "resolution": "1K",
+    "aspect_ratio": "1:1",
+    "seed": -1,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 40,
+    "max_tokens": 1024
+  }
+}
