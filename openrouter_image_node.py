@@ -17,7 +17,7 @@ class OpenRouterImageNode:
 
     Supports:
     - System and user prompt inputs
-    - Multiple reference images (up to 4)
+    - Multiple reference images (up to 10)
     - Configurable resolution (0.5K, 1K, 2K, 4K)
     - Configurable aspect ratio (1:1, 2:3, 3:2, 16:9, 9:16, 4:3, 3:4)
     - OpenRouter chat completions API with image generation modalities
@@ -28,10 +28,8 @@ class OpenRouterImageNode:
         "google/gemini-3-pro-image-preview",
         "google/gemini-3.1-flash-image-preview",
     ]
-
     # Resolution options for dropdown
     RESOLUTIONS = [
-        "0.5K",
         "1K",
         "2K",
         "4K",
@@ -109,7 +107,12 @@ class OpenRouterImageNode:
                 "image2": ("IMAGE",),
                 "image3": ("IMAGE",),
                 "image4": ("IMAGE",),
-            },
+                "image5": ("IMAGE",),
+                "image6": ("IMAGE",),
+                "image7": ("IMAGE",),
+                "image8": ("IMAGE",),
+                "image9": ("IMAGE",),
+                "image10": ("IMAGE",),
         }
 
     def _collect_reference_images(
@@ -118,6 +121,12 @@ class OpenRouterImageNode:
         image2: Optional[torch.Tensor],
         image3: Optional[torch.Tensor],
         image4: Optional[torch.Tensor],
+        image5: Optional[torch.Tensor],
+        image6: Optional[torch.Tensor],
+        image7: Optional[torch.Tensor],
+        image8: Optional[torch.Tensor],
+        image9: Optional[torch.Tensor],
+        image10: Optional[torch.Tensor],
     ) -> list[Image.Image]:
         """Collect and convert reference images from input tensors.
 
