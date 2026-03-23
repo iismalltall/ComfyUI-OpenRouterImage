@@ -1,12 +1,14 @@
-"""OpenRouter Image Generation Node for ComfyUI.
+"""Wangsu Image Generation Node for ComfyUI.
 
-This module provides a ComfyUI node for generating images using OpenRouter API.
+This module provides a ComfyUI node for generating images using Wangsu API.
 Supports system/user prompts, multiple reference images, and configurable resolution/aspect ratio.
 """
 
+import base64
 import json
 import os
 from pathlib import Path
+from urllib.request import urlopen
 from typing import Optional, Tuple
 
 import torch
@@ -19,41 +21,29 @@ from .utils import tensor_to_pils, pils_to_tensor, pil_to_base64_data_url, base6
 DOTENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=DOTENV_PATH)
 
-ENV_OPENROUTER_API_KEY = "OPENROUTER_API_KEY"
-ENV_OPENROUTER_BASE_URL = "OPENROUTER_BASE_URL"
-LEGACY_ENV_OPENROUTER_API_KEY = "openrouter-api-key"
-LEGACY_ENV_OPENROUTER_BASE_URL = "openrouter-base-url"
+ENV_WANGSU_API_KEY = "WANGSU_API_KEY"
+ENV_WANGSU_BASE_URL = "WANGSU_BASE_URL"
 
 
-def _get_env_value(primary_key: str, legacy_key: Optional[str] = None) -> Optional[str]:
-    value = os.getenv(primary_key)
-    if value:
-        return value
-
-    if legacy_key:
-        legacy_value = os.getenv(legacy_key)
-        if legacy_value:
-            return legacy_value
-
-    return None
+def _get_env_value(primary_key: str) -> Optional[str]:
+    return os.getenv(primary_key)
 
 
-class OpenRouterImageNode:
-    """ComfyUI node for generating images via OpenRouter API.
+class WangsuBananaImageNode:
+    """ComfyUI node for generating images via Wangsu API.
 
     Supports:
     - System and user prompt inputs
     - Multiple reference images (up to 10)
     - Configurable resolution (0.5K, 1K, 2K, 4K)
     - Configurable aspect ratio (1:1, 2:3, 3:2, 16:9, 9:16, 4:3, 3:4)
-    - OpenRouter chat completions API with image generation modalities
+    - Wangsu chat completions API with image generation modalities
     """
 
     # Model options for dropdown
     MODELS = [
-        "google/gemini-3-pro-image-preview",
-        "google/gemini-3.1-flash-image-preview",
-        "google/gemini-2.5-flash-image",
+        "gemini-3-pro-image-preview",
+        "gemini-3.1-flash-image-preview",
     ]
 
     # Resolution options for dropdown
@@ -178,7 +168,7 @@ class OpenRouterImageNode:
                     images.extend(pils)
                 except Exception as e:
                     print(
-                        f"[ComfyUI-OpenRouterImage] Warning: Failed to convert image tensor: {e}"
+                        f"[ComfyUI-WangsuImage] Warning: Failed to convert image tensor: {e}"
                     )
         return images
 
@@ -188,7 +178,7 @@ class OpenRouterImageNode:
         user_prompt: str,
         reference_images: list[Image.Image],
     ) -> list[dict]:
-        """Build the messages array for OpenRouter API.
+        """Build the messages array for Wangsu API.
 
         Args:
             system_prompt: System prompt text
@@ -198,10 +188,16 @@ class OpenRouterImageNode:
         Returns:
             List of message dictionaries for the API
         """
-        # Build user content with text and optional images
         user_content = []
 
-        # Add reference images first (before text for better context)
+        if system_prompt and system_prompt.strip():
+            user_content.append(
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                }
+            )
+
         for pil_img in reference_images:
             try:
                 data_url = pil_to_base64_data_url(pil_img, format="jpeg")
@@ -210,15 +206,15 @@ class OpenRouterImageNode:
                         "type": "image_url",
                         "image_url": {
                             "url": data_url,
+                            "detail": "high",
                         },
                     }
                 )
             except Exception as e:
                 print(
-                    f"[ComfyUI-OpenRouterImage] Warning: Failed to encode reference image: {e}"
+                    f"[ComfyUI-WangsuImage] Warning: Failed to encode reference image: {e}"
                 )
 
-        # Add user prompt text
         user_content.append(
             {
                 "type": "text",
@@ -227,20 +223,67 @@ class OpenRouterImageNode:
         )
 
         messages = [
-            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
 
         return messages
 
-    def _call_openrouter_api(
+    def _extract_image_url(self, message) -> Optional[str]:
+        images = getattr(message, "images", None)
+        if images:
+            image_urls = [
+                image["image_url"]["url"]
+                for image in images
+                if isinstance(image, dict)
+                and isinstance(image.get("image_url"), dict)
+                and image["image_url"].get("url")
+            ]
+            if image_urls:
+                return image_urls[-1]
+
+        content = getattr(message, "content", None)
+        if isinstance(content, list):
+            typed_image_urls = [
+                item["image_url"]["url"]
+                for item in content
+                if isinstance(item, dict)
+                and item.get("type") == "image_url"
+                and isinstance(item.get("image_url"), dict)
+                and item["image_url"].get("url")
+            ]
+            if typed_image_urls:
+                return typed_image_urls[-1]
+
+            fallback_image_urls = [
+                item["image_url"]["url"]
+                for item in content
+                if isinstance(item, dict)
+                and isinstance(item.get("image_url"), dict)
+                and item["image_url"].get("url")
+            ]
+            if fallback_image_urls:
+                return fallback_image_urls[-1]
+
+        return None
+
+    def _image_url_to_pil(self, image_url: str) -> Image.Image:
+        if image_url.startswith("data:"):
+            return base64_to_pil(image_url)
+
+        if image_url.startswith("http"):
+            with urlopen(image_url, timeout=60) as response:
+                return Image.open(response).convert("RGB")
+
+        return base64_to_pil(image_url)
+
+    def _call_wangsu_api(
         self,
         model: str,
         messages: list[dict],
         resolution: str,
         aspect_ratio: str,
     ) -> Tuple[Optional[Image.Image], str]:
-        """Call OpenRouter API to generate image.
+        """Call Wangsu API to generate image.
 
         Args:
             model: Model identifier
@@ -251,24 +294,18 @@ class OpenRouterImageNode:
         Returns:
             Tuple of (PIL Image or None, status string)
         """
-        api_key = _get_env_value(
-            ENV_OPENROUTER_API_KEY,
-            LEGACY_ENV_OPENROUTER_API_KEY,
-        )
+        api_key = _get_env_value(ENV_WANGSU_API_KEY)
         if not api_key:
             return (
                 None,
-                "Error: OpenRouter API key is required. Set OPENROUTER_API_KEY in .env.",
+                "Error: Wangsu API key is required. Set WANGSU_API_KEY in .env.",
             )
 
-        base_url = _get_env_value(
-            ENV_OPENROUTER_BASE_URL,
-            LEGACY_ENV_OPENROUTER_BASE_URL,
-        )
+        base_url = _get_env_value(ENV_WANGSU_BASE_URL)
         if not base_url:
             return (
                 None,
-                "Error: OpenRouter base URL is required. Set OPENROUTER_BASE_URL in .env.",
+                "Error: Wangsu base URL is required. Set WANGSU_BASE_URL in .env.",
             )
 
         # Use OpenAI SDK
@@ -285,30 +322,26 @@ class OpenRouterImageNode:
         if resolution == "0.5K" and "gemini-3.1-flash" not in model:
             return (
                 None,
-                f"Error: 0.5K resolution is only supported by google/gemini-3.1-flash-image-preview, "
+                f"Error: 0.5K resolution is only supported by gemini-3.1-flash-image-preview, "
                 f"but current model is {model}. Please use 1K, 2K, or 4K instead.",
             )
 
-        # Build extra_body configuration for OpenAI SDK
         extra_body = {
             "modalities": ["image", "text"],
             "temperature": 0.6,
             "candidateCount": 1,
+            "image_config": {
+                "image_size": resolution,
+                "aspect_ratio": aspect_ratio,
+            },
+            "eca_image_config": {
+                "image_size": resolution,
+                "aspect_ratio": aspect_ratio,
+            },
         }
 
-        # Add image_config
-        image_config = {}
-        if aspect_ratio != "1:1":
-            image_config["aspect_ratio"] = aspect_ratio
-        if resolution != "1K":
-            image_config["image_size"] = resolution
-
-        if image_config:
-            extra_body["image_config"] = image_config
-
-        # Debug: print configuration being sent
         print(
-            f"[ComfyUI-OpenRouterImage] Using OpenAI SDK with extra_body: {json.dumps(extra_body, indent=2)}"
+            f"[ComfyUI-WangsuImage] Using OpenAI SDK with extra_body: {json.dumps(extra_body, indent=2)}"
         )
 
         # Initialize OpenAI client
@@ -317,7 +350,7 @@ class OpenRouterImageNode:
             api_key=api_key,
         )
 
-        # Call OpenRouter API using OpenAI SDK
+        # Call Wangsu API using OpenAI SDK
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -327,21 +360,13 @@ class OpenRouterImageNode:
         except Exception as e:
             return None, f"API Error: {str(e)}"
 
-        # Parse response to extract generated image
         try:
             message = response.choices[0].message
 
-            # Check for images in the response
-            if hasattr(message, "images") and message.images:
-                # Get the last image (usually the highest resolution)
-                last_image_idx = len(message.images) - 1
-                image_url = message.images[last_image_idx]["image_url"]["url"]
-
-                if image_url.startswith("data:image"):
-                    # Extract base64 data
-                    base64_str = image_url.split(",", 1)[1]
-                    pil_img = base64_to_pil(base64_str)
-                    return pil_img, "Image generated successfully"
+            image_url = self._extract_image_url(message)
+            if image_url:
+                pil_img = self._image_url_to_pil(image_url)
+                return pil_img, "Image generated successfully"
 
             # No image found - return text content as status
             text_content = ""
@@ -385,7 +410,7 @@ class OpenRouterImageNode:
         image9: Optional[torch.Tensor] = None,
         image10: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, str]:
-        """Generate image using OpenRouter API.
+        """Generate image using Wangsu API.
 
         Args:
             system_prompt: System prompt for the model
@@ -423,7 +448,7 @@ class OpenRouterImageNode:
         messages = self._build_messages(system_prompt, user_prompt, reference_images)
 
         # Call API
-        generated_img, status = self._call_openrouter_api(
+        generated_img, status = self._call_wangsu_api(
             model=model,
             messages=messages,
             resolution=resolution,
@@ -443,10 +468,10 @@ class OpenRouterImageNode:
 
 # Node class mappings for ComfyUI
 NODE_CLASS_MAPPINGS = {
-    "OpenRouterImageNode": OpenRouterImageNode,
+    "WangsuBananaImageNode": WangsuBananaImageNode,
 }
 
 # Node display name mappings for ComfyUI
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "OpenRouterImageNode": "OpenRouter Image Generator",
+    "WangsuBananaImageNode": "Wangsu Banana Image Generator",
 }
