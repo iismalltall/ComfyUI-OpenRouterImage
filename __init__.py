@@ -21,16 +21,24 @@ except ImportError as e:
     )
     WangsuBananaImageNode = None
 
-# Node class mappings for ComfyUI
+try:
+    from .wangsu_image_generate_node import WangsuImageNode
+except ImportError as e:
+    print(
+        f"[ComfyUI-OpenRouterImage] Warning: Could not import WangsuImageNode: {e}"
+    )
+    WangsuImageNode = None
+
 NODE_CLASS_MAPPINGS = {
     "ComfyUI-OpenRouterImage": OpenRouterImageNode,
     "ws_banana_image": WangsuBananaImageNode,
+    "ws_image": WangsuImageNode,
 }
 
-# Node display name mappings for ComfyUI
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfyUI-OpenRouterImage": "ComfyUI-OpenRouterImage",
     "ws_banana_image": "Wangsu Banana Image Generator",
+    "ws_image": "Wangsu Image Generator",
 }
 
 __all__ = [
@@ -38,4 +46,5 @@ __all__ = [
     "NODE_DISPLAY_NAME_MAPPINGS",
     "OpenRouterImageNode",
     "WangsuBananaImageNode",
+    "WangsuImageNode",
 ]
